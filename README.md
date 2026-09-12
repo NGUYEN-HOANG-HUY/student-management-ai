@@ -58,8 +58,9 @@ Tạo file `backend/.env` từ `backend/.env.example` nếu cần đổi cấu h
 
 ```env
 PORT=5000
-FRONTEND_URL=http://localhost:5173
-JWT_SECRET=change-this-development-secret
+FRONTEND_URL=http://localhost:5173,http://localhost:5174
+JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
+JWT_EXPIRES_IN=8h
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 OLLAMA_URL=http://127.0.0.1:11434
@@ -141,7 +142,7 @@ POST /api/auth/login
 Các API còn lại yêu cầu header:
 
 ```text
-Authorization: Bearer <jwt-token>
+Authorization: Bearer <JWT_TOKEN>
 ```
 
 ```text
@@ -166,6 +167,18 @@ GET  /api/classes
 POST /api/ai/analyze/:studentId
 POST /api/ai/recommend/:studentId
 POST /api/ai/analyze-class/:classId
+
+GET  /api/auth/me
+GET  /api/admin/dashboard
+GET  /api/admin/users
+GET  /api/teacher/dashboard
+GET  /api/teacher/students
+POST /api/teacher/scores
+PUT  /api/teacher/scores/:id
+GET  /api/student/dashboard
+GET  /api/student/profile
+GET  /api/student/grades
+GET  /api/student/ai-analysis
 ```
 
 `/api/ai/analyze-class/:classId` dành cho admin và giảng viên. Giảng viên chỉ
@@ -173,7 +186,9 @@ POST /api/ai/analyze-class/:classId
 
 ## Database
 
-SQLite được tạo tự động tại `database/database.sqlite`.
+SQLite được tạo tự động tại `database/database.sqlite`. Chỉ sử dụng backend
+trong thư mục `backend` và frontend trong thư mục `frontend`; `backend/server`
+và `client` là cấu trúc thử nghiệm cũ, không chạy song song.
 
 Schema nằm tại `backend/database/schema.sql`. Khi backend khởi động, hệ thống tự tạo bảng và seed dữ liệu mẫu gồm:
 
@@ -349,4 +364,201 @@ Admin:   admin / admin123
 Student: SV001 / student123
 Student: SV002 / student123
 Student: SV003 / student123
+```
+
+## Cau truc thu muc chinh
+
+Chi su dung hai thu muc chinh khi chay ung dung:
+
+```text
+student-management-ai/
+├── backend/
+│   ├── controllers/       # Xu ly request va response
+│   ├── database/          # SQLite, schema va seed
+│   ├── middleware/        # JWT va phan quyen
+│   ├── routes/            # REST API routes
+│   ├── services/          # Analytics, AI va recommendation
+│   ├── app.js
+│   └── server.js
+├── frontend/
+│   └── src/
+│       ├── components/
+│       ├── pages/
+│       ├── services/
+│       └── App.jsx
+└── README.md
+```
+
+`backend/server/` va `client/` la cau truc thu nghiem cu. Khong khoi dong
+hai cau truc nay dong thoi voi `backend/` va `frontend/`.
+
+## Cau hinh moi truong
+
+Tao `backend/.env` tu `backend/.env.example`. Khong commit file `.env`.
+
+| Bien | Bat buoc | Mo ta |
+| --- | --- | --- |
+| `PORT` | Khong | Cong backend, mac dinh `5000` |
+| `JWT_SECRET` | Co | Chuoi bi mat dung ky JWT |
+| `JWT_EXPIRES_IN` | Khong | Thoi han token, mac dinh `8h` |
+| `FRONTEND_URL` | Khong | Origin frontend duoc phep qua CORS |
+| `OLLAMA_URL` | Khong | Mac dinh `http://127.0.0.1:11434` |
+| `OLLAMA_MODEL` | Khong | Mac dinh `gemma:2b` |
+
+Neu `JWT_SECRET` thieu, backend khong nen duoc chay trong moi truong demo.
+Hay tao secret ngau nhien dai it nhat 32 ky tu.
+
+## Authentication va phan quyen
+
+Dang nhap:
+
+```powershell
+$login = Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:5000/api/auth/login `
+  -ContentType 'application/json' `
+  -Body '{"username":"SV001","password":"student123"}'
+
+$token = $login.data.token
+$login.data.user
+```
+
+Gui token cho cac API bao ve:
+
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:5000/api/auth/me `
+  -Headers $headers
+```
+
+Quyen theo role:
+
+| Role | Pham vi |
+| --- | --- |
+| `admin` | Quan ly toan he thong, dashboard, users va du lieu hoc tap |
+| `teacher` | Xem sinh vien lop phu trach, xem/nhap/sua diem |
+| `student` | Chi xem profile, diem va AI analysis cua chinh minh |
+
+Student ID cua student duoc lay tu JWT va database. Frontend khong duoc tu
+truyen `studentId` de xem du lieu cua sinh vien khac.
+
+## Student Dashboard va AI Analysis
+
+Luong chinh:
+
+```text
+Login
+  -> localStorage (JWT)
+  -> GET /api/student/dashboard
+  -> GET /api/student/ai-analysis
+  -> hien thi GPA, xu huong, risk, diem manh/yeu,
+     recommendation, priority subjects va study plan
+```
+
+API AI cua student:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:5000/api/student/ai-analysis `
+  -Headers $headers
+```
+
+Response nam trong `data` va gom cac nhom:
+
+```text
+data.student
+data.academic
+data.strengths
+data.weakSubjects
+data.prioritySubjects
+data.risk
+data.aiAnalysis
+```
+
+`data.academic.gpa` la GPA he 4 cua database hien tai. Neu Ollama khong
+phan hoi, `data.aiAnalysis.source` se la `RULE_BASED`; ung dung van tra
+khuyen nghi va khong bi crash.
+
+## Kiem tra phan quyen nhanh
+
+Student khong duoc truy cap admin hoac teacher:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:5000/api/admin/dashboard `
+  -Headers $headers
+```
+
+Ket qua mong doi la HTTP `403`. Token thieu hoac sai tra ve HTTP `401`.
+
+## Xu ly loi thuong gap
+
+### Frontend khong ket noi backend
+
+1. Kiem tra backend:
+
+   ```powershell
+   Invoke-RestMethod http://localhost:5000/api/health
+   ```
+
+2. Kiem tra frontend dang mo tai `http://localhost:5173`, khong phai
+   frontend cu tai port `5174`.
+3. Kiem tra `FRONTEND_URL` trong `backend/.env`.
+4. Mo DevTools > Network va xac nhan request den `/api/...` co status `200`,
+   `401` hoac `403`, khong phai `ERR_CONNECTION_REFUSED`.
+
+### AI local khong hoat dong
+
+Day khong phai loi bat buoc. Kiem tra:
+
+```powershell
+ollama list
+Invoke-RestMethod http://127.0.0.1:11434/api/tags
+```
+
+Neu Ollama chua chay, dung:
+
+```powershell
+ollama serve
+```
+
+Neu khong co model:
+
+```powershell
+ollama pull gemma:2b
+```
+
+He thong se tu dong dung rule-based fallback trong luc Ollama khong kha
+dung.
+
+### Database khong dung du lieu demo
+
+Khong xoa file SQLite de sua loi. Kiem tra truoc:
+
+```powershell
+cd backend
+npm run db:check
+```
+
+Seed duoc thiet ke idempotent, co the chay lai:
+
+```powershell
+npm run db:init
+```
+
+## Lenh kiem tra truoc khi nop/demo
+
+```powershell
+cd backend
+node --check server.js
+node --check app.js
+npm run db:check
+
+cd ..\frontend
+npm run lint
+npm run build
 ```

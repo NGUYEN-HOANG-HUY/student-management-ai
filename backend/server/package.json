@@ -6,13 +6,19 @@
   "description": "Student AI System backend",
   "main": "server.js",
   "scripts": {
+    "db:init": "node database/initDatabase.js",
+    "db:seed": "node database/seedDatabase.js",
+    "db:check": "node database/checkDatabase.js",
     "dev": "nodemon server.js",
     "start": "node server.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

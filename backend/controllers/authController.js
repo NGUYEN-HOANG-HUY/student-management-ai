@@ -8,7 +8,10 @@ const loginSchema = z.object({
 })
 
 function jwtSecret() {
-  return process.env.JWT_SECRET || 'development-secret-change-me'
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not configured')
+  }
+  return process.env.JWT_SECRET
 }
 
 export async function login(request, response, next) {
@@ -33,9 +36,9 @@ export async function login(request, response, next) {
     }
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, studentId: user.studentId, teacherId: user.teacherId },
+      { id: user.id },
       jwtSecret(),
-      { expiresIn: '8h' },
+      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
     )
 
     response.json({

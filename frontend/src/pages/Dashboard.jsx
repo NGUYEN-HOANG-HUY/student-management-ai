@@ -28,15 +28,62 @@ function Dashboard() {
   const [classAiStatus, setClassAiStatus] = useState('idle')
   const user = JSON.parse(localStorage.getItem('student-ai-user') || 'null')
   const canAnalyzeClass = user?.role === 'admin' || user?.role === 'teacher'
+  const isStudent = user?.role === 'student'
+  const [studentAnalysis, setStudentAnalysis] = useState(null)
+  const [studentAiStatus, setStudentAiStatus] = useState('loading')
+
+  async function loadStudentAnalysis() {
+    setStudentAiStatus('loading')
+    try {
+      const { data } = await api.get('/student/ai-analysis')
+      setStudentAnalysis(data.data)
+      setStudentAiStatus('success')
+      return data.data
+    } catch (error) {
+      setStudentAiStatus(error.response?.status === 404 ? 'empty' : 'error')
+      throw error
+    }
+  }
 
   useEffect(() => {
+    if (isStudent) {
+      Promise.all([api.get('/student/dashboard'), api.get('/student/ai-analysis')])
+        .then(([, analysisResponse]) => {
+          const analysis = analysisResponse.data.data
+          setStudentAnalysis(analysis)
+          setStudentAiStatus('success')
+          setDashboard({
+            totals: {
+              students: 1,
+              subjects: analysis.academic.passedSubjects + analysis.academic.failedSubjects,
+              averageGpa: analysis.academic.gpa,
+              atRiskStudents: analysis.risk.level === 'LOW' ? 0 : 1,
+            },
+            gpaTrend: analysis.academic.semesterAverages,
+            scoreDistribution: [],
+            topWeakSubjects: analysis.weakSubjects.map((subject) => ({
+              subjectName: subject.subjectName,
+              count: 1,
+            })),
+            atRiskStudents: [],
+          })
+          setStatus('success')
+          return
+        })
+        .catch((error) => {
+          setStudentAiStatus(error.response?.status === 404 ? 'empty' : 'error')
+          setStatus('error')
+        })
+      return
+    }
+
     api.get('/analytics/dashboard')
       .then(({ data }) => {
         setDashboard(data.data)
         setStatus('success')
       })
       .catch(() => setStatus('error'))
-  }, [])
+  }, [isStudent])
 
   useEffect(() => {
     if (!canAnalyzeClass) return
@@ -76,7 +123,7 @@ function Dashboard() {
         <div>
           <div className="eyebrow">STUDENT MANAGEMENT AI</div>
           <h1>Dashboard học tập</h1>
-          <p>Theo dõi chất lượng học tập và các tín hiệu cần hỗ trợ.</p>
+          <p>{isStudent ? 'Theo dõi kết quả và khuyến nghị học tập cá nhân.' : 'Theo dõi chất lượng học tập và các tín hiệu cần hỗ trợ.'}</p>
         </div>
         <div className="system-badge"><span /> Dữ liệu local</div>
       </header>
@@ -87,6 +134,73 @@ function Dashboard() {
         <StatCard label="GPA trung bình" value={totals.averageGpa.toFixed(2)} tone="green" />
         <StatCard label="Sinh viên nguy cơ" value={totals.atRiskStudents} tone="red" />
       </section>
+
+      {isStudent && studentAnalysis && (
+        <section className="panel ai-class-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>AI PHÂN TÍCH KẾT QUẢ HỌC TẬP</h2>
+              <p>{studentAnalysis.aiAnalysis.source === 'RULE_BASED' ? 'Ollama chưa khả dụng - đang dùng phân tích luật.' : 'Phân tích từ Ollama local.'}</p>
+            </div>
+            <div className="toolbar-actions">
+              <strong className={`risk-badge ${studentAnalysis.risk.level.toLowerCase()}`}>{studentAnalysis.risk.level}</strong>
+              <button className="secondary-button" type="button" onClick={loadStudentAnalysis} disabled={studentAiStatus === 'loading'}>
+                {studentAiStatus === 'loading' ? 'AI đang phân tích...' : 'Phân tích lại'}
+              </button>
+            </div>
+          </div>
+          <div className="student-ai-grid">
+            <div className="student-ai-card"><span>GPA hiện tại</span><strong>{studentAnalysis.academic.gpa.toFixed(2)} / 4</strong></div>
+            <div className="student-ai-card"><span>Xu hướng học tập</span><strong>{trendLabel(studentAnalysis.academic.trend)}</strong></div>
+            <div className="student-ai-card"><span>Đánh giá nguy cơ</span><strong>{riskLabel(studentAnalysis.risk.level)}</strong></div>
+          </div>
+          <div className="student-ai-section">
+            <h3>Nhận xét từ AI</h3>
+            <p className="analysis-summary">{studentAnalysis.aiAnalysis.summary}</p>
+          </div>
+          <div className="analysis-columns student-ai-section">
+            <div>
+              <h3>Điểm mạnh</h3>
+              <SubjectList items={studentAnalysis.strengths} empty="Chưa có môn đạt ngưỡng điểm mạnh." />
+            </div>
+            <div>
+              <h3>Cần cải thiện</h3>
+              <SubjectList items={studentAnalysis.weakSubjects} empty="Chưa phát hiện môn dưới 5.0." showPriority />
+            </div>
+          </div>
+          <div className="student-ai-section">
+            <h3>Lý do rủi ro</h3>
+            <List items={studentAnalysis.risk.reasons} empty="Chưa có lý do rủi ro." />
+          </div>
+          <div className="analysis-columns student-ai-section">
+            <div>
+              <h3>AI khuyến nghị</h3>
+              <List items={studentAnalysis.aiAnalysis.recommendations.map((item) => `${item.title}: ${item.reason} ${item.action}`)} empty="Chưa có khuyến nghị." />
+            </div>
+            <div>
+              <h3>Môn học cần ưu tiên</h3>
+              {studentAnalysis.prioritySubjects.length ? (
+                <ol>{studentAnalysis.prioritySubjects.map((item) => <li key={`${item.subject}-${item.priority}`}>{item.priority}. {item.subject} ({item.score})<small>{item.reason}</small></li>)}</ol>
+              ) : <p className="empty-state">Hiện tại không có môn học cần ưu tiên đặc biệt.</p>}
+            </div>
+          </div>
+          <div className="student-ai-section">
+            <h3>Lộ trình học tập đề xuất</h3>
+            {studentAnalysis.aiAnalysis.studyPlan.length ? (
+              <div className="plan-list">{studentAnalysis.aiAnalysis.studyPlan.map((week) => <div className="plan-item" key={week.week}><strong>Tuần {week.week}</strong><span>{(week.subjects || []).join(', ')}</span><small>{(week.goals || []).join(' · ')} {(week.tasks || []).join(' · ')}</small></div>)}</div>
+            ) : <p className="empty-state">Chưa có lộ trình học tập.</p>}
+          </div>
+        </section>
+      )}
+      {isStudent && studentAiStatus === 'error' && (
+        <section className="panel ai-class-panel">
+          <p className="form-error">Không thể phân tích kết quả học tập lúc này.</p>
+          <button className="secondary-button" type="button" onClick={loadStudentAnalysis}>Thử lại</button>
+        </section>
+      )}
+      {isStudent && studentAiStatus === 'empty' && (
+        <section className="panel ai-class-panel"><p className="empty-state">Chưa có đủ dữ liệu học tập để AI phân tích.</p></section>
+      )}
 
       <section className="charts-grid">
         <article className="panel chart-panel">
@@ -216,6 +330,22 @@ function Dashboard() {
       )}
     </main>
   )
+}
+
+function trendLabel(trend) {
+  return { IMPROVING: 'Đang tiến bộ', STABLE: 'Ổn định', DECLINING: 'Có dấu hiệu giảm' }[trend] || trend
+}
+
+function riskLabel(level) {
+  return { LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao' }[level] || level
+}
+
+function List({ items, empty }) {
+  return items?.length ? <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="empty-state">{empty}</p>
+}
+
+function SubjectList({ items, empty, showPriority = false }) {
+  return items?.length ? <ul>{items.map((item) => <li key={`${item.subjectName}-${item.score}`}>{item.subjectName} — {item.score}{showPriority && <small>Ưu tiên cao</small>}</li>)}</ul> : <p className="empty-state">{empty}</p>
 }
 
 export default Dashboard

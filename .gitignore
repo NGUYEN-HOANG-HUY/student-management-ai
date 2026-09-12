@@ -13,6 +13,13 @@ build/
 # Logs
 *.log
 
+# Local database files
+*.sqlite
+*.sqlite3
+*.db
+database/
+data/
+
 # Python
 __pycache__/
 *.pyc

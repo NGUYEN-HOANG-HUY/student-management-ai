@@ -1,8 +1,13 @@
 import jwt from 'jsonwebtoken'
 
-const jwtSecret = () => process.env.JWT_SECRET || 'development-secret-change-me'
+function getJwtSecret() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not configured')
+  }
+  return process.env.JWT_SECRET
+}
 
-export function requireAuth(request, response, next) {
+export async function requireAuth(request, response, next) {
   const authorization = request.headers.authorization
   const token = authorization?.startsWith('Bearer ')
     ? authorization.slice(7)
@@ -13,9 +18,24 @@ export function requireAuth(request, response, next) {
   }
 
   try {
-    request.user = jwt.verify(token, jwtSecret())
+    const payload = jwt.verify(token, getJwtSecret())
+    const user = await request.app.get('database').get(
+      `SELECT id, username, role, student_id AS studentId, teacher_id AS teacherId
+       FROM users
+       WHERE id = ?`,
+      payload.id,
+    )
+
+    if (!user) {
+      return response.status(401).json({ success: false, message: 'Tài khoản không còn tồn tại' })
+    }
+
+    request.user = user
     next()
-  } catch {
+  } catch (error) {
+    if (error.message === 'JWT_SECRET is not configured') {
+      return next(error)
+    }
     response.status(401).json({ success: false, message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn' })
   }
 }

@@ -11,13 +11,20 @@ import scoreRouter from './routes/scoreRoutes.js'
 import semesterRouter from './routes/semesterRoutes.js'
 import studentRouter from './routes/studentRoutes.js'
 import subjectRouter from './routes/subjectRoutes.js'
+import { registerRoleRoutes } from './routes/roleRoutes.js'
 
 dotenv.config()
 
 const app = express()
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 
-app.use(cors({ origin: frontendUrl }))
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}))
 app.use(express.json({ limit: '100kb' }))
 
 app.get('/', (_request, response) => {
@@ -29,6 +36,7 @@ app.get('/', (_request, response) => {
 
 app.use('/api/health', healthRouter)
 app.use('/api/auth', authRouter)
+registerRoleRoutes(app)
 app.use('/api/classes', requireAuth, requireAdminOrTeacher, classRouter)
 app.use('/api/analytics', requireAuth, analyticsRouter)
 app.use('/api/ai', requireAuth, aiRouter)

@@ -474,8 +474,65 @@ input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   margin-top: 1rem;
 }
 
+.student-ai-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.student-ai-card {
+  padding: 16px;
+  border: 1px solid #e9d5ff;
+  border-radius: 10px;
+  background: #faf5ff;
+}
+
+.student-ai-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.student-ai-card strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: 1.25rem;
+}
+
+.student-ai-section {
+  margin-top: 22px;
+}
+
+.student-ai-section h3 {
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.student-ai-section ul,
+.student-ai-section ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.student-ai-section li small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
 @media (max-width: 700px) {
   .ai-class-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .student-ai-grid {
     grid-template-columns: 1fr;
   }
 }

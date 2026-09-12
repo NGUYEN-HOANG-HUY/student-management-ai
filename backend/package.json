@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "db:init": "node database/init.js",
+    "db:check": "node database/check.js",
     "dev": "nodemon server.js",
     "start": "node server.js"
   },

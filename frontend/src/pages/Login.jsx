@@ -5,7 +5,7 @@ import { login } from '../services/auth'
 function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [form, setForm] = useState({ username: 'admin', password: 'admin123' })
+  const [form, setForm] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
